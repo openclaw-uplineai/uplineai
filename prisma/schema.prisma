@@ -1,0 +1,225 @@
+// Prisma schema for Sprint 1 foundation (CA-only, CA Life only)
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite" // Sprint 1 local dev; designed to map cleanly to Postgres later
+}
+
+enum State {
+  CA
+}
+
+enum LicenseLine {
+  CA_LIFE
+}
+
+enum Tier {
+  DIY_FREE
+  CONCIERGE_200_PLUS_FEES
+  INNER_CIRCLE_1500_INCL_FEES
+}
+
+enum OnboardingStatus {
+  not_started
+  in_progress
+  complete
+}
+
+enum StepStatus {
+  not_started
+  in_progress
+  done
+  blocked
+}
+
+enum TaskStatus {
+  open
+  done
+  canceled
+}
+
+enum TaskPriority {
+  low
+  med
+  high
+}
+
+enum ContactStatus {
+  lead
+  prospect
+  client
+  inactive
+}
+
+enum DocumentKey {
+  enrollment_guide
+  student_user_guide
+  best_practices_guide
+}
+
+model User {
+  id          String   @id @default(uuid())
+  email       String   @unique
+  passwordHash String
+
+  firstName   String
+  lastName    String
+  phone       String?
+  timezone    String   @default("America/Los_Angeles")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastLoginAt DateTime?
+
+  profile            Profile?
+  licensingProgress  LicensingProgress?
+  stepStatuses       LicensingStepStatus[]
+
+  contacts     Contact[]     @relation("ContactsOwner")
+  contactNotes ContactNote[]
+  tasks        Task[]
+  auditEvents  AuditEvent[]
+
+  @@map("users")
+}
+
+model Profile {
+  id                 String           @id @default(uuid())
+  userId             String           @unique
+  user               User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  state              State            @default(CA)
+  licenseLine        LicenseLine      @default(CA_LIFE)
+  tier               Tier             @default(DIY_FREE)
+
+  partnerSiteAck      Boolean         @default(false)
+  partnerCodeEntered  String?
+  partnerGatePassedAt DateTime?
+
+  onboardingStatus    OnboardingStatus @default(not_started)
+
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  @@map("profiles")
+}
+
+model LicensingProgress {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  currentStepKey   String?
+  nextStepKey      String?
+  percentComplete  Int      @default(0)
+
+  updatedAt        DateTime @updatedAt
+
+  @@map("licensing_progress")
+}
+
+model LicensingStepStatus {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  stepKey     String
+  status      StepStatus @default(not_started)
+  completedAt DateTime?
+  notes       String?
+
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([userId, stepKey])
+  @@map("licensing_step_status")
+}
+
+model Contact {
+  id           String        @id @default(uuid())
+  ownerUserId  String
+  owner        User          @relation("ContactsOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  firstName    String
+  lastName     String
+  email        String?
+  phone        String?
+
+  status       ContactStatus @default(lead)
+  source       String?
+  tags         String? // Sprint 1: comma-separated; can normalize later
+
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  notes        ContactNote[]
+  tasks        Task[]
+
+  @@map("contacts")
+}
+
+model ContactNote {
+  id          String   @id @default(uuid())
+  contactId   String
+  contact     Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  ownerUserId String
+  owner       User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  body        String
+  createdAt   DateTime @default(now())
+
+  @@map("contact_notes")
+}
+
+model Task {
+  id              String       @id @default(uuid())
+  ownerUserId     String
+  owner           User         @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  relatedContactId String?
+  relatedContact   Contact?     @relation(fields: [relatedContactId], references: [id], onDelete: SetNull)
+
+  relatedStepKey  String?
+
+  title           String
+  description     String?
+  dueAt           DateTime?
+  status          TaskStatus    @default(open)
+  priority        TaskPriority  @default(med)
+
+  createdAt       DateTime      @default(now())
+  completedAt     DateTime?
+
+  @@index([ownerUserId, status, dueAt])
+  @@map("tasks")
+}
+
+model Document {
+  id        String      @id @default(uuid())
+  key       DocumentKey @unique
+  title     String
+  url       String
+  version   String?
+  createdAt DateTime    @default(now())
+
+  @@map("documents")
+}
+
+model AuditEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  eventType String
+  payload   String? // Sprint 1: JSON string; switch to Json type when on Postgres
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, eventType, createdAt])
+  @@map("audit_events")
+}
