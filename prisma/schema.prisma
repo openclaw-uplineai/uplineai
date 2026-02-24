@@ -1,12 +1,13 @@
 // Prisma schema for Sprint 1 foundation (CA-only, CA Life only)
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider   = "prisma-client-js"
+  engineType = "binary"
 }
 
 datasource db {
   provider = "sqlite" // Sprint 1 local dev; designed to map cleanly to Postgres later
+  url      = env("DATABASE_URL")
 }
 
 enum State {
@@ -27,6 +28,11 @@ enum OnboardingStatus {
   not_started
   in_progress
   complete
+}
+
+enum TierRequestStatus {
+  open
+  closed
 }
 
 enum StepStatus {
@@ -62,22 +68,24 @@ enum DocumentKey {
 }
 
 model User {
-  id          String   @id @default(uuid())
-  email       String   @unique
+  id           String   @id @default(uuid())
+  email        String   @unique
   passwordHash String
 
-  firstName   String
-  lastName    String
-  phone       String?
-  timezone    String   @default("America/Los_Angeles")
+  firstName    String
+  lastName     String
+  phone        String?
+  timezone     String   @default("America/Los_Angeles")
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  lastLoginAt DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastLoginAt  DateTime?
 
-  profile            Profile?
-  licensingProgress  LicensingProgress?
-  stepStatuses       LicensingStepStatus[]
+  profile           Profile?
+  licensingProgress LicensingProgress?
+  stepStatuses      LicensingStepStatus[]
+
+  tierRequests TierRequest[]
 
   contacts     Contact[]     @relation("ContactsOwner")
   contactNotes ContactNote[]
@@ -208,6 +216,25 @@ model Document {
   createdAt DateTime    @default(now())
 
   @@map("documents")
+}
+
+model TierRequest {
+  id            String            @id @default(uuid())
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  requestedTier Tier
+  phone         String?
+  bestTime      String?
+  notes         String?
+
+  status        TierRequestStatus @default(open)
+
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([userId, requestedTier, status, createdAt])
+  @@map("tier_requests")
 }
 
 model AuditEvent {
