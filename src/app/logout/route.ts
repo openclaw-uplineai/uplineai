@@ -5,5 +5,7 @@ import { getSession } from "@/lib/session";
 export async function POST() {
   const session = await getSession();
   session.destroy();
-  return NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"));
+
+  // Relative redirect: avoids needing NEXT_PUBLIC_BASE_URL.
+  return NextResponse.redirect(new URL("/login", "http://localhost"));
 }
